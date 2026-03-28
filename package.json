@@ -4,17 +4,20 @@
   "private": true,
   "scripts": {
     "dev": "tsx server.ts",
+    "start": "tsx server.ts",
+    "build": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "postinstall": "prisma generate"
   },
-  "devDependencies": {
-    "tsx": "^4.21.0"
-  },
   "dependencies": {
     "@prisma/client": "^6.11.1",
     "prisma": "^6.11.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
   }
 }

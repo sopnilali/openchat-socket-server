@@ -64,16 +64,7 @@ const db =
 
 globalForPrisma.chatServicePrisma = db
 
-const httpServer = createServer()
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  },
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  allowEIO3: true,
-})
+const INTERNAL_SECRET = process.env.CHAT_INTERNAL_SECRET || 'openchat-dev-internal'
 
 /** Same payload as socket path — used by Next API so recipients update even if sender socket missed. */
 function broadcastMessageUnsent(messageId: string, senderId: string, receiverId: string) {
@@ -82,14 +73,7 @@ function broadcastMessageUnsent(messageId: string, senderId: string, receiverId:
   io.to(`user:${receiverId}`).emit('message-unsent', payload)
 }
 
-const INTERNAL_SECRET = process.env.CHAT_INTERNAL_SECRET || 'openchat-dev-internal'
-const BROADCAST_PORT = Number(process.env.CHAT_BROADCAST_PORT || 3004)
-
-const broadcastServer = createServer((req: IncomingMessage, res: ServerResponse) => {
-  if (req.method !== 'POST' || req.url !== '/broadcast-unsent') {
-    res.writeHead(404).end()
-    return
-  }
+function handleBroadcastUnsent(req: IncomingMessage, res: ServerResponse) {
   const header = req.headers['x-chat-internal']
   const token = Array.isArray(header) ? header[0] : header
   if (token !== INTERNAL_SECRET) {
@@ -124,6 +108,37 @@ const broadcastServer = createServer((req: IncomingMessage, res: ServerResponse)
   req.on('error', () => {
     res.destroy()
   })
+}
+
+const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+  const path = req.url?.split('?')[0] ?? ''
+
+  if (req.method === 'POST' && path === '/broadcast-unsent') {
+    handleBroadcastUnsent(req, res)
+    return
+  }
+
+  if (req.method === 'GET' && (path === '/' || path === '/health')) {
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('ok')
+    return
+  }
+
+  if (path.startsWith('/socket.io')) {
+    return
+  }
+
+  res.writeHead(404).end()
+})
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  allowEIO3: true,
 })
 
 interface User {
@@ -430,18 +445,14 @@ io.on('connection', (socket) => {
   })
 })
 
-const CHAT_PORT = Number(process.env.CHAT_PORT || process.env.PORT || 3003)
-httpServer.listen(CHAT_PORT, () => {
-  console.log(`Chat WebSocket server running on port ${CHAT_PORT}`)
-})
-
-broadcastServer.listen(BROADCAST_PORT, '127.0.0.1', () => {
-  console.log(`Unsend broadcast HTTP on http://127.0.0.1:${BROADCAST_PORT}/broadcast-unsent`)
+const listenPort = Number(process.env.PORT || process.env.CHAT_PORT || 3003)
+const listenHost = process.env.LISTEN_HOST || '0.0.0.0'
+httpServer.listen(listenPort, listenHost, () => {
+  console.log(`Chat server on http://${listenHost}:${listenPort} (Socket.IO + POST /broadcast-unsent)`)
 })
 
 // Graceful shutdown
 function shutdown() {
-  broadcastServer.close(() => {})
   void db.$disconnect().then(() => {
     httpServer.close(() => {
       console.log('WebSocket server closed')
