@@ -1,0 +1,104 @@
+// Mirrors openchat/prisma/schema.prisma — keep in sync when models change.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique
+  email        String     @unique
+  password     String?
+  avatarUrl    String?
+  status       String     @default("offline")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  accounts               Account[]
+  sentMessages           Message[]       @relation("SentMessages")
+  receivedMessages       Message[]       @relation("ReceivedMessages")
+  hiddenMessages         MessageHidden[]
+  conversations          Conversation[]  @relation("UserConversations")
+  sentFriendRequests     Friendship[]    @relation("FriendRequester")
+  receivedFriendRequests Friendship[]    @relation("FriendAddressee")
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  senderId       String
+  receiverId     String
+  conversationId String
+  content        String
+  timestamp      DateTime @default(now())
+  status         String   @default("sent")
+  createdAt      DateTime @default(now())
+
+  sender       User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver     User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation("Messages", fields: [conversationId], references: [id], onDelete: Cascade)
+  hiddenByUsers MessageHidden[]
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([conversationId])
+}
+
+model MessageHidden {
+  id        String   @id @default(cuid())
+  userId    String
+  messageId String
+  hiddenAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId])
+  @@index([messageId])
+}
+
+model Conversation {
+  id            String   @id @default(cuid())
+  participants  String
+  lastMessageId String?
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  participants_users User[]    @relation("UserConversations")
+  messages           Message[] @relation("Messages")
+}
+
+model Friendship {
+  id          String   @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requester User @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
+}
