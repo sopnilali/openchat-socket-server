@@ -2,6 +2,10 @@
   "name": "chat-service",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
